@@ -49,4 +49,4 @@ npm test                    # API tests (need the local database)
 Migrations in `server/migrations/` run automatically on server start.
 
 ## Status
-Live transcription and the transcript API are working. The dashboard UI and deployment come next.
+Live transcription, the transcript API and the dashboard (add, edit, delete, paging, save from the live view) are working. Deployment comes next.

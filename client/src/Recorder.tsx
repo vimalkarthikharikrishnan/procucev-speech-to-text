@@ -11,11 +11,13 @@ type ServerMessage =
 const SAMPLE_RATE = 16000;
 const NEW_LINE_GAP_MS = 2500;
 
-export default function Recorder() {
+export default function Recorder({ onSave }: { onSave: (text: string) => Promise<void> }) {
   const [status, setStatus] = useState<Status>("idle");
   const [lines, setLines] = useState<string[]>([]);
   const [current, setCurrent] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const audioRef = useRef<{ ctx: AudioContext; stream: MediaStream } | null>(null);
@@ -135,13 +137,53 @@ export default function Recorder() {
   );
 
   const busy = status !== "idle";
+  const hasText = lines.length > 0 || current.trim() !== "";
+
+  const begin = () => {
+    setSaved(false);
+    void start();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave([...lines, current.trim()].filter(Boolean).join("\n"));
+      setLines([]);
+      updateCurrent("");
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the transcript.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clear = () => {
+    setLines([]);
+    updateCurrent("");
+    setSaved(false);
+  };
 
   return (
     <section>
-      <button onClick={busy ? stop : start} disabled={status === "connecting"}>
-        {status === "idle" ? "Start speaking" : status === "connecting" ? "Connecting..." : "Stop"}
-      </button>
-      {status === "recording" && <span className="live"> Listening</span>}
+      <div className="form-row">
+        <button onClick={busy ? stop : begin} disabled={status === "connecting"}>
+          {status === "idle" ? "Start speaking" : status === "connecting" ? "Connecting..." : "Stop"}
+        </button>
+        {status === "recording" && <span className="live">Listening</span>}
+        {!busy && hasText && (
+          <>
+            <button className="success" onClick={() => void save()} disabled={saving}>
+              {saving ? "Saving..." : "Save transcript"}
+            </button>
+            <button className="secondary" onClick={clear} disabled={saving}>
+              Discard
+            </button>
+          </>
+        )}
+        {saved && !hasText && <span className="ok">Saved</span>}
+      </div>
       {error && <p className="error">{error}</p>}
 
       <div className="transcript" aria-live="polite">

@@ -1,8 +1,13 @@
-import "dotenv/config";
+import { config } from "dotenv";
+import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
 import { createPool, migrate } from "./db.js";
 import { createGeminiProvider } from "./speech/gemini.js";
 import type { SpeechProvider } from "./speech/provider.js";
+
+// npm runs this from server/, so point at the .env in the project root.
+// On a host that sets real environment variables the file is simply absent.
+config({ path: fileURLToPath(new URL("../../.env", import.meta.url)) });
 
 const port = Number(process.env.PORT ?? 3000);
 
