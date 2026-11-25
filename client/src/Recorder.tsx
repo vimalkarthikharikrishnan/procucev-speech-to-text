@@ -9,6 +9,7 @@ type ServerMessage =
   | { type: "error"; message: string };
 
 const SAMPLE_RATE = 16000;
+const NEW_LINE_GAP_MS = 2500;
 
 export default function Recorder() {
   const [status, setStatus] = useState<Status>("idle");
@@ -19,6 +20,7 @@ export default function Recorder() {
   const socketRef = useRef<WebSocket | null>(null);
   const audioRef = useRef<{ ctx: AudioContext; stream: MediaStream } | null>(null);
   const currentRef = useRef("");
+  const lastPieceAtRef = useRef(0);
 
   const updateCurrent = (value: string) => {
     currentRef.current = value;
@@ -88,9 +90,15 @@ export default function Recorder() {
             (err: unknown) => fail(err instanceof Error ? err.message : "Could not use the microphone."),
           );
           break;
-        case "transcript":
+        case "transcript": {
+          // The engine does not always signal the end of a turn, so a pause
+          // of a couple of seconds between pieces also starts a new line.
+          const now = Date.now();
+          if (now - lastPieceAtRef.current > NEW_LINE_GAP_MS) finishLine();
+          lastPieceAtRef.current = now;
           updateCurrent(currentRef.current + message.text);
           break;
+        }
         case "turn_end":
           finishLine();
           break;
