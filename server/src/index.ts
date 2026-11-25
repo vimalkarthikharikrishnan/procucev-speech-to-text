@@ -1,13 +1,26 @@
 import "dotenv/config";
-import express from "express";
+import { createApp } from "./app.js";
+import { createGeminiProvider } from "./speech/gemini.js";
+import type { SpeechProvider } from "./speech/provider.js";
 
-const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
+function buildProvider(): SpeechProvider {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    // Start anyway so the rest of the app works; /ws reports the problem.
+    return {
+      start: () => Promise.reject(new Error("GEMINI_API_KEY is not set in .env")),
+    };
+  }
+  return createGeminiProvider({
+    apiKey,
+    model: process.env.GEMINI_MODEL ?? "gemini-3.8-live",
+  });
+}
 
-app.listen(port, () => {
+const { server } = createApp(buildProvider());
+
+server.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);
 });
