@@ -26,7 +26,7 @@ export function createGeminiProvider({ apiKey, model }: GeminiOptions): SpeechPr
         model,
         config: {
           responseModalities: [Modality.AUDIO],
-          inputAudioTranscription: {},
+          inputAudioTranscription: { languageCodes: ["hi-IN", "en-IN"] },
           systemInstruction: SILENT_TRANSCRIBER,
         },
         callbacks: {
