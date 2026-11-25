@@ -48,5 +48,16 @@ npm test                    # API tests (need the local database)
 ```
 Migrations in `server/migrations/` run automatically on server start.
 
+## Deploy (Render + Neon)
+1. Create a free Postgres project on [Neon](https://neon.tech) and copy its connection string.
+2. On [Render](https://render.com), create a new Blueprint from this repo (`render.yaml` is picked up automatically).
+3. Set `DATABASE_URL` (the Neon string) and `GEMINI_API_KEY` when asked.
+4. Deploy. The server runs the migrations on start and serves the React app, the API and `/ws` from one URL.
+
+Notes: the microphone needs HTTPS, which Render provides. The free plan sleeps after 15 minutes without traffic, so the first request after a pause takes about a minute.
+
+## CI
+GitHub Actions (`.github/workflows/ci.yml`) runs typecheck, build and the tests against a Postgres service on every push and pull request.
+
 ## Status
 Live transcription, the transcript API and the dashboard (add, edit, delete, paging, save from the live view) are working. Deployment comes next.

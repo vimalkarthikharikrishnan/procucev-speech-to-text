@@ -8,7 +8,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultMigrationsDir = path.resolve(here, "../migrations");
 
 export function createPool(connectionString: string): pg.Pool {
-  return new pg.Pool({ connectionString });
+  const pool = new pg.Pool({ connectionString });
+  // A hosted database (Neon) closes idle connections. Without a listener the
+  // resulting error on an idle client would crash the whole process.
+  pool.on("error", (error) => console.error("Idle database client error:", error.message));
+  return pool;
 }
 
 /**
