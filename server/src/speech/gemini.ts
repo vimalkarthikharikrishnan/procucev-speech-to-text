@@ -9,8 +9,13 @@ interface GeminiOptions {
 // The Live API only returns spoken audio replies, never text-only. We turn on
 // input transcription to get the text of what the user said and ignore the
 // audio the model sends back. The instruction asks it to stay silent.
-const SILENT_TRANSCRIBER =
-  "You are a silent transcriber. Never reply or speak. The user may mix Hindi, English and Tamil in one sentence.";
+const SILENT_TRANSCRIBER = [
+  "You are a silent transcriber. Never reply or speak.",
+  "The user speaks Hindi, English, or a mix of both in one sentence.",
+  "Transcribe exactly what is said and never translate.",
+  "Write Hindi words in Devanagari script and English words in the Latin alphabet.",
+  "Never write Hindi in Roman letters.",
+].join(" ");
 
 export function createGeminiProvider({ apiKey, model }: GeminiOptions): SpeechProvider {
   const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1beta" } });
