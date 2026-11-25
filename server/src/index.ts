@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createApp } from "./app.js";
+import { createPool, migrate } from "./db.js";
 import { createGeminiProvider } from "./speech/gemini.js";
 import type { SpeechProvider } from "./speech/provider.js";
 
@@ -19,7 +20,21 @@ function buildProvider(): SpeechProvider {
   });
 }
 
-const { server } = createApp(buildProvider());
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  console.error("DATABASE_URL is not set. Copy .env.example to .env and fill it in.");
+  process.exit(1);
+}
+
+const pool = createPool(databaseUrl);
+try {
+  await migrate(pool);
+} catch (error) {
+  console.error("Could not connect to or migrate the database:", error);
+  process.exit(1);
+}
+
+const { server } = createApp({ provider: buildProvider(), pool });
 
 server.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);

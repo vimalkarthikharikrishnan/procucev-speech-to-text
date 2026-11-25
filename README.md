@@ -26,5 +26,27 @@ docker-compose.yml   local PostgreSQL
 .env.example         configuration keys
 ```
 
+## API
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/health` | liveness check |
+| GET | `/api/transcripts?limit=50&offset=0` | list, newest first, with `total` |
+| GET | `/api/transcripts/:id` | read one |
+| POST | `/api/transcripts` | create `{ "text": "...", "language": "hi-en" }` |
+| PATCH | `/api/transcripts/:id` | update `text` and/or `language` (`null` clears it) |
+| DELETE | `/api/transcripts/:id` | delete (204) |
+
+Invalid input returns 400 with details, a missing id returns 404.
+
+## Local setup
+```
+cp .env.example .env        # add GEMINI_API_KEY
+docker compose up -d db     # local PostgreSQL on port 5433
+npm install
+npm run dev                 # server :3000, client :5173
+npm test                    # API tests (need the local database)
+```
+Migrations in `server/migrations/` run automatically on server start.
+
 ## Status
-Project skeleton only. Features are being added phase by phase.
+Live transcription and the transcript API are working. The dashboard UI and deployment come next.

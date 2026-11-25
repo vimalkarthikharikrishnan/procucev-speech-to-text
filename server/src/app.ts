@@ -2,9 +2,17 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import express from "express";
+import express, { type ErrorRequestHandler } from "express";
+import type { Pool } from "pg";
 import { WebSocketServer, type RawData } from "ws";
 import type { SpeechProvider, SpeechSession } from "./speech/provider.js";
+import { createTranscriptRepo } from "./transcripts/repo.js";
+import { createTranscriptsRouter } from "./transcripts/routes.js";
+
+export interface AppDeps {
+  provider: SpeechProvider;
+  pool: Pool;
+}
 
 /** Messages the server sends to the browser over /ws. */
 export type ServerMessage =
@@ -24,11 +32,17 @@ function toBuffer(data: RawData): Buffer {
  * Browser protocol: binary messages are PCM audio chunks; the text message
  * {"type":"end"} means the microphone stopped.
  */
-export function createApp(provider: SpeechProvider) {
+export function createApp({ provider, pool }: AppDeps) {
   const app = express();
+  app.use(express.json({ limit: "100kb" }));
 
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.use("/api/transcripts", createTranscriptsRouter(createTranscriptRepo(pool)));
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "Not found" });
   });
 
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +54,16 @@ export function createApp(provider: SpeechProvider) {
       res.sendFile(path.join(clientDist, "index.html"));
     });
   }
+
+  const onError: ErrorRequestHandler = (error, _req, res, _next) => {
+    if (error?.type === "entity.parse.failed") {
+      res.status(400).json({ error: "Request body is not valid JSON" });
+      return;
+    }
+    console.error("Unhandled error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  };
+  app.use(onError);
 
   const server = http.createServer(app);
   const wss = new WebSocketServer({ server, path: "/ws" });

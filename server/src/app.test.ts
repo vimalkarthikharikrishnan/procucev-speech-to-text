@@ -1,4 +1,5 @@
 import type { AddressInfo } from "node:net";
+import { Pool } from "pg";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { createApp, type ServerMessage } from "./app.js";
@@ -32,7 +33,8 @@ afterEach(() => {
 });
 
 async function startServer(provider: SpeechProvider) {
-  const { server } = createApp(provider);
+  // This pool is never queried in these tests, so it never connects.
+  const { server } = createApp({ provider, pool: new Pool() });
   await new Promise<void>((resolve) => server.listen(0, resolve));
   open.push(() => server.close());
   const { port } = server.address() as AddressInfo;
