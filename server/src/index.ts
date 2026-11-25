@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
 import { createPool, migrate } from "./db.js";
 import { createGeminiProvider } from "./speech/gemini.js";
+import { withScriptFix } from "./speech/normalize.js";
+import { createGeminiScriptFixer } from "./speech/scriptFix.js";
 import type { SpeechProvider } from "./speech/provider.js";
 
 // npm runs this from server/, so point at the .env in the project root.
@@ -19,10 +21,16 @@ function buildProvider(): SpeechProvider {
       start: () => Promise.reject(new Error("GEMINI_API_KEY is not set in .env")),
     };
   }
-  return createGeminiProvider({
+  const speech = createGeminiProvider({
     apiKey,
     model: process.env.GEMINI_MODEL ?? "gemini-3.8-live",
   });
+
+  // The speech engine writes English words inside Hindi sentences in Devanagari.
+  // A second, fast text model puts them back in English letters. Set
+  // SCRIPT_FIX_MODEL to an empty value to turn this step off.
+  const fixModel = process.env.SCRIPT_FIX_MODEL ?? "gemini-3.5-flash-lite";
+  return fixModel ? withScriptFix(speech, createGeminiScriptFixer(apiKey, fixModel)) : speech;
 }
 
 const databaseUrl = process.env.DATABASE_URL;

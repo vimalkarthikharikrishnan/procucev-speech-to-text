@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Status = "idle" | "connecting" | "recording";
+type Status = "idle" | "connecting" | "recording" | "stopping";
 
 type ServerMessage =
   | { type: "ready" }
@@ -10,6 +10,10 @@ type ServerMessage =
 
 const SAMPLE_RATE = 16000;
 const NEW_LINE_GAP_MS = 2500;
+// After Stop, wait for the last phrase: up to 3.5 s for the first one, then
+// close once nothing new has arrived for 1.5 s.
+const STOP_WAIT_MS = 3500;
+const STOP_QUIET_MS = 1500;
 
 export default function Recorder({ onSave }: { onSave: (text: string) => Promise<void> }) {
   const [status, setStatus] = useState<Status>("idle");
@@ -23,6 +27,7 @@ export default function Recorder({ onSave }: { onSave: (text: string) => Promise
   const audioRef = useRef<{ ctx: AudioContext; stream: MediaStream } | null>(null);
   const currentRef = useRef("");
   const lastPieceAtRef = useRef(0);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateCurrent = (value: string) => {
     currentRef.current = value;
@@ -34,6 +39,11 @@ export default function Recorder({ onSave }: { onSave: (text: string) => Promise
     if (text) setLines((prev) => [...prev, text]);
     currentRef.current = "";
     setCurrent("");
+  }, []);
+
+  const closeSoon = useCallback((socket: WebSocket, ms: number) => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => socket.close(), ms);
   }, []);
 
   const stopCapture = useCallback(() => {
@@ -77,6 +87,7 @@ export default function Recorder({ onSave }: { onSave: (text: string) => Promise
     socketRef.current = socket;
 
     const fail = (message: string) => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       setError(message);
       setStatus("idle");
       stopCapture();
@@ -99,6 +110,8 @@ export default function Recorder({ onSave }: { onSave: (text: string) => Promise
           if (now - lastPieceAtRef.current > NEW_LINE_GAP_MS) finishLine();
           lastPieceAtRef.current = now;
           updateCurrent(currentRef.current + message.text);
+          // Already stopped and this is a late piece: wait a little longer for more.
+          if (closeTimerRef.current) closeSoon(socket, STOP_QUIET_MS);
           break;
         }
         case "turn_end":
@@ -111,25 +124,30 @@ export default function Recorder({ onSave }: { onSave: (text: string) => Promise
     };
     socket.onerror = () => fail("Could not reach the server.");
     socket.onclose = () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
       stopCapture();
       finishLine();
       setStatus("idle");
     };
-  }, [finishLine, startCapture, stopCapture]);
+  }, [closeSoon, finishLine, startCapture, stopCapture]);
 
   const stop = useCallback(() => {
     const socket = socketRef.current;
     stopCapture();
     if (socket?.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "end" }));
-      // Keep the connection open briefly so the last words can arrive.
-      setTimeout(() => socket.close(), 1500);
+      // Keep the connection open so the last words can arrive; onclose sets idle.
+      closeSoon(socket, STOP_WAIT_MS);
+      setStatus("stopping");
+    } else {
+      setStatus("idle");
     }
-    setStatus("idle");
-  }, [stopCapture]);
+  }, [closeSoon, stopCapture]);
 
   useEffect(
     () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       stopCapture();
       socketRef.current?.close();
     },
@@ -168,8 +186,17 @@ export default function Recorder({ onSave }: { onSave: (text: string) => Promise
   return (
     <section>
       <div className="form-row">
-        <button onClick={busy ? stop : begin} disabled={status === "connecting"}>
-          {status === "idle" ? "Start speaking" : status === "connecting" ? "Connecting..." : "Stop"}
+        <button
+          onClick={busy ? stop : begin}
+          disabled={status === "connecting" || status === "stopping"}
+        >
+          {status === "idle"
+            ? "Start speaking"
+            : status === "connecting"
+              ? "Connecting..."
+              : status === "stopping"
+                ? "Finishing..."
+                : "Stop"}
         </button>
         {status === "recording" && <span className="live">Listening</span>}
         {!busy && hasText && (
